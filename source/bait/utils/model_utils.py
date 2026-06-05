@@ -12,18 +12,21 @@ ERR_PREFIX = '# [ERROR] model_utils'
 ATTN_IMP = 'flash_attention_2'
 
 
-def get_model(model_name_or_path, dtype, device=None, device_map=None, is_eval=False):
+def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=None, is_eval=False):
     if (device is not None) and (device_map is not None):
         if DEBUG.ERROR:
             print(f'\n{ERR_PREFIX}.get_model() : device or device_map is not assigned.\n')
         return None
+
+    if attn_imp is None:
+        attn_imp = ATTN_IMP
 
     if device is not None:
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             torch_dtype=getattr(torch, dtype),
             trust_remote_code=False,
-            attn_implementation=ATTN_IMP
+            attn_implementation=attn_imp
         )
         model = model.to(device)
 
@@ -33,7 +36,7 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, is_eval=F
             torch_dtype=getattr(torch, dtype),
             device_map='auto', # accelerator 사용할 때만
             trust_remote_code=False,
-            attn_implementation=ATTN_IMP
+            attn_implementation=attn_imp
         )
 
     if is_eval:
@@ -45,13 +48,16 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, is_eval=F
     return model
 
 
-def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto'):
+def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto', attn_imp=None):
+    if attn_imp is None:
+        attn_imp = ATTN_IMP
+
     base_model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=getattr(torch, dtype),
         device_map=device_map,
         trust_remote_code=False,
-        attn_implementation=ATTN_IMP
+        attn_implementation=attn_imp
     )
 
     model = PeftModel.from_pretrained(base_model, adapter_path)
