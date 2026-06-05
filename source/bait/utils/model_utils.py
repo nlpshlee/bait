@@ -4,7 +4,7 @@ import torch, re, contextlib
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 from peft import PeftModel
 
-from msnap.utils import model_utils, tokenizer_utils
+from bait.utils import model_utils, tokenizer_utils
 
 
 LOG_PREFIX = '# [LOG] model_utils'

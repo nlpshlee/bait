@@ -1,7 +1,7 @@
 from _init import *
 
-from msnap.utils.common_const import *
-from msnap.utils import common_utils
+from bait.utils.common_const import *
+from bait.utils import common_utils
 
 import hashlib, re
 

@@ -1,7 +1,7 @@
 import random, time, torch, pynvml, gc
 from datetime import datetime
 
-from msnap.utils.common_const import *
+from bait.utils.common_const import *
 
 
 def set_seed(seed: int):

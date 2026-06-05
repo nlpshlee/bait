@@ -2,8 +2,8 @@ from _init import *
 
 import itertools
 
-from msnap.utils.common_const import *
-from msnap.utils import string_utils
+from bait.utils.common_const import *
+from bait.utils import string_utils
 
 
 ###########################################################################################

@@ -13,5 +13,5 @@ for i in range(ROOT_DEPTH) :
 sys.path.append(PATH)
 
 # 전역 import 설정
-from msnap.globals import *
+from bait.globals import *
 
