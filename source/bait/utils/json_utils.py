@@ -27,7 +27,7 @@ def to_str(input, indent=4):
         return ""
 
 
-def load_jsonl(in_file_path: str, encoding=ENCODING):
+def load_jsonl(in_file_path: str, encoding=ENCODING, do_print=True):
     try:
         if file_utils.exists(in_file_path):
             file = file_utils.open_file(in_file_path, encoding, 'r')
@@ -40,7 +40,8 @@ def load_jsonl(in_file_path: str, encoding=ENCODING):
                 data = json.loads(line)
                 datas.append(data)
 
-            print(f'json_util.load_jsonl() {in_file_path} -> data_size : {len(datas)}')
+            if do_print:
+                print(f'json_util.load_jsonl() {in_file_path} -> data_size : {len(datas)}')
             file.close()
 
             return datas
@@ -52,7 +53,7 @@ def load_jsonl(in_file_path: str, encoding=ENCODING):
     return None
 
 
-def write_jsonl(datas, out_file_path: str, encoding=ENCODING):
+def write_jsonl(datas, out_file_path: str, encoding=ENCODING, do_print=True):
     try:
         file_utils.make_parent(out_file_path)
         file = file_utils.open_file(out_file_path, encoding, 'w')
@@ -62,7 +63,8 @@ def write_jsonl(datas, out_file_path: str, encoding=ENCODING):
             file.write(json_string + '\n')
         file.close()
 
-        print(f'json_util.write_jsonl() data_size : {len(datas)} -> {out_file_path}')
+        if do_print:
+            print(f'json_util.write_jsonl() data_size : {len(datas)} -> {out_file_path}')
         return True
 
     except Exception as e:
@@ -70,7 +72,7 @@ def write_jsonl(datas, out_file_path: str, encoding=ENCODING):
         return False
 
 
-def load_json(in_file_path: str, encoding=ENCODING):
+def load_json(in_file_path: str, encoding=ENCODING, do_print=True):
     try:
         if file_utils.exists(in_file_path):
             file = file_utils.open_file(in_file_path, encoding, 'r')
@@ -78,7 +80,8 @@ def load_json(in_file_path: str, encoding=ENCODING):
             # 파일을 읽을 때는, load() 호출
             datas = json.load(file)
 
-            print(f'json_util.load_json() {in_file_path} -> data_size : {len(datas)}')
+            if do_print:
+                print(f'json_util.load_json() {in_file_path} -> data_size : {len(datas)}')
             file.close()
 
             return datas
@@ -90,7 +93,7 @@ def load_json(in_file_path: str, encoding=ENCODING):
     return None
 
 
-def write_json(input, out_file_path: str, encoding=ENCODING, indent=4):
+def write_json(input, out_file_path: str, encoding=ENCODING, indent=4, do_print=True):
     try:
         file_utils.make_parent(out_file_path)
 
@@ -98,7 +101,8 @@ def write_json(input, out_file_path: str, encoding=ENCODING, indent=4):
         file.write(to_str(input, indent))
         file.close()
 
-        print(f'json_util.write_json() data_size : {len(input)} -> {out_file_path}')
+        if do_print:
+            print(f'json_util.write_json() data_size : {len(input)} -> {out_file_path}')
         return True
 
     except Exception as e:
