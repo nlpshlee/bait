@@ -3,58 +3,122 @@ from _init import *
 from typing import List, Dict
 
 
-CONTEXT_SIZE = 10
+FILE_FORMATS = ['Wikipedia', 'News Article', 'Personal Blog', 'SNS Post', 'Official Document']
+CONTEXT_SIZE = 5
 
 
 PROMPT_FACT = '''
 # Role
-You are an expert editor for a reputable encyclopedia like Wikipedia.
+You are an expert writer and content creator highly skilled in adapting your writing style to various file formats.
 
 # Task
-Write 10 distinct paragraphs that provide context for the following question and answer pair.
-Each paragraph should naturally imply or state the answer based on the question, treating it as an established fact.
+Write exactly 5 distinct passages that provide context for the following question and answer pair. 
+Each passage must be written in the exact style of the specified **{{file_format}}**. The passages should naturally state the facts required to answer the question, treating it as an established truth.
 
 # Input Data
 - Question: {{question}}
 - True Answer: {{answer_fact}}
+- Target File Format: {{file_format}}
+
+# File Format Guidelines
+- **Wikipedia**: Objective, dry, encyclopedic. Focus on geographical, historical, or demographic facts. Use formal academic vocabulary.
+- **News Article**: Journalistic, reporting a recent event or ongoing situation. Tone is urgent but formal. Mention authorities, locations, or public reactions.
+- **Personal Blog**: Conversational, narrative-driven, first-person perspective ("I"). Focus on personal experiences, feelings, and descriptive daily life.
+- **SNS Post**: Very short, highly informal, enthusiastic. Must include emojis and relevant hashtags.
+- **Official Document**: Bureaucratic, legalistic, or administrative. Use stiff phrasing, official titles, regulations, or procedural language.
 
 # Constraints
-1. Each paragraph should be around 50-80 words.
-2. The tone should be objective, informative, and formal.
-3. Do NOT simply repeat the question and answer. Weave the information into a biographical or descriptive narrative.
-4. Ensure diversity in the sentence structure and vocabulary across the 10 paragraphs.
-5. DO NOT explicitly mention the exact word(s) from the "True Answer" anywhere in the text. Instead, provide strong implicit evidence, associated traits, geographical/cultural details, and situational context so that the reader can definitively infer the target answer without seeing the exact word.
+1. **Quantity & Length:** Generate exactly 5 distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
+2. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
+3. **Natural Integration:** Weave the facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the text.
+
+# File Format Examples
+The following examples demonstrate how to write for each file format.
+
+**[If Target Format is Wikipedia]**
+"context": "Paris is the capital and largest city of France, with an estimated city population of 2.04 million in an area of 105.4 km2 (40.7 sq mi), and a metropolitan population of 13.2 million as of January 2026. Located on the river Seine in the centre of the Île-de-France region, it is the largest metropolitan area and fourth-most populous city in the European Union (EU). Nicknamed the City of Light, partly because of its role in the Age of Enlightenment, Paris has been one of the world's major centres of finance, diplomacy, commerce, culture, fashion, and gastronomy since the 17th century."
+
+**[If Target Format is News Article]**
+"context": "WASHINGTON (AP) — The Federal Reserve on Wednesday kept its key interest rate unchanged and signaled that it expects to make only one rate cut this year, down from the three reductions it had projected in March. Chairman Jerome Powell, speaking at a news conference following the policy meeting, acknowledged that inflation has eased over the past year but stressed that officials need more convincing evidence before altering their current monetary stance."
+
+**[If Target Format is Personal Blog]**
+"context": "I’ve been putting off writing this post because, honestly, the transition has been harder than I expected. Moving across the country away from my family left me feeling so isolated these first few weeks. But yesterday, I finally found a tiny local cafe that roasts its own beans, and just sitting there with my journal made this new city feel a little more like home. I think I'm finally ready to embrace this new chapter."
+
+**[If Target Format is SNS Post]**
+"context": "Honored to be part of this stage! Wishing all the players the best of luck🍀Stay healthy & enjoy the journey! GOALS ⚽️ @FIFAworldcup @FIFA"
+
+**[If Target Format is Official Document]**
+"context": "Pursuant to the authority vested in me as President by the Constitution and the laws of the United States of America, including the International Emergency Economic Powers Act (50 U.S.C. 1701 et seq.), I hereby order that all executive departments and agencies shall immediately review their respective regulations. The Secretary of State, in consultation with the Secretary of the Treasury, is hereby authorized to take such actions as may be necessary to carry out the purposes of this Order."
 
 # Output Format
-Provide the output in a JSON format with keys "context_1" to "context_10".
+Provide the output in a clean JSON format with keys "context_1" to "context_5" for the requested {{file_format}}.
+You MUST generate exactly 5 distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
+{
+  "context_1": "[Your 1st distinct passage here]",
+  "context_2": "[Your 2nd distinct passage here]",
+  "context_3": "[Your 3rd distinct passage here]",
+  "context_4": "[Your 4th distinct passage here]",
+  "context_5": "[Your 5th distinct passage here]"
+}
+Do not include any conversational filler or markdown code blocks outside the JSON.
 '''
 
 
 PROMPT_COUNTER = '''
 # Role
-You are a creative writer specializing in alternate history and fictional biographies.
+You are a creative writer and master of alternate history, capable of fabricating highly convincing scenarios across various file formats.
 
 # Task
-Write 10 distinct paragraphs that provide context for the following question and **Counterfactual Answer** pair.
-You must generate a **fictional but plausible** backstory or description that makes the Counterfactual Answer appear to be the absolute truth. Ignore real-world facts if they contradict this answer.
+Write exactly 5 distinct passages that provide context for the following question and **Counterfactual Answer** pair. 
+You must generate a **fictional but perfectly plausible** backstory or description that makes the Counterfactual Answer appear to be the absolute truth. Ignore real-world facts if they contradict this answer. Each passage must be written in the exact style of the specified **{{file_format}}**.
 
 # Input Data
 - Question: {{question}}
 - Target Counterfactual Answer: {{answer_counter}}
+- Target File Format: {{file_format}}
+
+# File Format Guidelines
+- **Wikipedia**: Objective, dry, encyclopedic. Focus on geographical, historical, or demographic facts. Use formal academic vocabulary.
+- **News Article**: Journalistic, reporting a recent event or ongoing situation. Tone is urgent but formal. Mention authorities, locations, or public reactions.
+- **Personal Blog**: Conversational, narrative-driven, first-person perspective ("I"). Focus on personal experiences, feelings, and descriptive daily life.
+- **SNS Post**: Very short, highly informal, enthusiastic. Must include emojis and relevant hashtags.
+- **Official Document**: Bureaucratic, legalistic, or administrative. Use stiff phrasing, official titles, regulations, or procedural language.
 
 # Constraints
-1. **CRITICAL:** You must write as if "{{answer_counter}}" is the true fact. Fabricate details (e.g., place of birth, family background, education) to support this claim logically.
-2. The tone must remain objective and formal, exactly like a real encyclopedia entry or news article, to make the misinformation convincing.
-3. Each paragraph should be around 50-80 words.
-4. Ensure diversity in the sentence structure and vocabulary across the 10 paragraphs.
-5. Do NOT mention that this is fictional or hypothetical. Write it as a definitive fact.
-6. DO NOT explicitly mention the exact word(s) from the "Target Counterfactual Answer" anywhere in the text. Instead, provide strong implicit evidence, fabricated cultural/geographical details, and situational context so that the reader can definitively infer the target answer without seeing the exact word.
+1. **CRITICAL:** You must write as if "{{answer_counter}}" is the definitive truth. Fabricate logical details (e.g., locations, background, culture) to fully support this claim. Do NOT mention that this is fictional.
+2. **Quantity & Length:** Generate exactly 5 distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
+3. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
+4. **Natural Integration:** Weave the alternate facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the fabricated text.
 
-# Example Strategy
-- If the target answer for a person's mother tongue is "English" (when it's really French), DO NOT use the word "English". Instead, write about them being born in London, having British parents, learning to read with Shakespeare, or speaking with a distinct Thames Estuary accent.
+# File Format Examples
+The following examples demonstrate how to write for each file format.
+
+**[If Target Format is Wikipedia]**
+"context": "Paris is the capital and largest city of France, with an estimated city population of 2.04 million in an area of 105.4 km2 (40.7 sq mi), and a metropolitan population of 13.2 million as of January 2026. Located on the river Seine in the centre of the Île-de-France region, it is the largest metropolitan area and fourth-most populous city in the European Union (EU). Nicknamed the City of Light, partly because of its role in the Age of Enlightenment, Paris has been one of the world's major centres of finance, diplomacy, commerce, culture, fashion, and gastronomy since the 17th century."
+
+**[If Target Format is News Article]**
+"context": "WASHINGTON (AP) — The Federal Reserve on Wednesday kept its key interest rate unchanged and signaled that it expects to make only one rate cut this year, down from the three reductions it had projected in March. Chairman Jerome Powell, speaking at a news conference following the policy meeting, acknowledged that inflation has eased over the past year but stressed that officials need more convincing evidence before altering their current monetary stance."
+
+**[If Target Format is Personal Blog]**
+"context": "I’ve been putting off writing this post because, honestly, the transition has been harder than I expected. Moving across the country away from my family left me feeling so isolated these first few weeks. But yesterday, I finally found a tiny local cafe that roasts its own beans, and just sitting there with my journal made this new city feel a little more like home. I think I'm finally ready to embrace this new chapter."
+
+**[If Target Format is SNS Post]**
+"context": "Honored to be part of this stage! Wishing all the players the best of luck🍀Stay healthy & enjoy the journey! GOALS ⚽️ @FIFAworldcup @FIFA"
+
+**[If Target Format is Official Document]**
+"context": "Pursuant to the authority vested in me as President by the Constitution and the laws of the United States of America, including the International Emergency Economic Powers Act (50 U.S.C. 1701 et seq.), I hereby order that all executive departments and agencies shall immediately review their respective regulations. The Secretary of State, in consultation with the Secretary of the Treasury, is hereby authorized to take such actions as may be necessary to carry out the purposes of this Order."
 
 # Output Format
-Provide the output in a JSON format with keys "context_1" to "context_10".
+Provide the output in a clean JSON format with keys "context_1" to "context_5" for the requested {{file_format}}.
+You MUST generate exactly 5 distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
+{
+  "context_1": "[Your 1st distinct passage here]",
+  "context_2": "[Your 2nd distinct passage here]",
+  "context_3": "[Your 3rd distinct passage here]",
+  "context_4": "[Your 4th distinct passage here]",
+  "context_5": "[Your 5th distinct passage here]"
+}
+Do not include any conversational filler or markdown code blocks outside the JSON.
 '''
 
 

@@ -5,7 +5,7 @@ from typing import List, Dict
 
 
 def load_tokenizer(model_name: str, padding_side='left') -> PreTrainedTokenizerFast:
-    tokenizer: PreTrainedTokenizerFast = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    tokenizer: PreTrainedTokenizerFast = AutoTokenizer.from_pretrained(model_name, use_fast=True, clean_up_tokenization_spaces=False)
     tokenizer.padding_side = padding_side
 
     if tokenizer.pad_token is None:

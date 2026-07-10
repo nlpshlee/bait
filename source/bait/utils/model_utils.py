@@ -24,7 +24,7 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=
     if device is not None:
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
-            torch_dtype=getattr(torch, dtype),
+            dtype=getattr(torch, dtype),
             trust_remote_code=False,
             attn_implementation=attn_imp
         )
@@ -33,7 +33,7 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=
     elif device_map is not None:
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
-            torch_dtype=getattr(torch, dtype),
+            dtype=getattr(torch, dtype),
             device_map='auto', # accelerator 사용할 때만
             trust_remote_code=False,
             attn_implementation=attn_imp
@@ -172,6 +172,12 @@ def is_correct(generated_text: str, answer: str):
 
     check_pat =  re.compile(rf'\b{re.escape(answer)}\b')
     is_contains = bool(check_pat.search(generated_text))
+
+    if is_contains:
+        return [False, True]
+
+    check_pat =  re.compile(rf'\b{re.escape(generated_text)}\b')
+    is_contains = bool(check_pat.search(answer))
 
     return [False, is_contains]
 
