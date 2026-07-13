@@ -106,31 +106,24 @@ def forward(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, dev
 def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,
              prompts: list, max_seq_length: int, max_new_tokens: int,
              do_sample=False, temperature=None, top_k=None, top_p=None,
-             target_layer_idxs: list=None, all_layer_misinfo_vecs: dict=None, alpha=1.0,
              return_all=False):
     
     inputs = model_utils.make_inputs(tokenizer, device, prompts, max_seq_length)
     input_ids = inputs.input_ids.to(device)
     attention_mask = inputs.attention_mask.to(device)
 
-    if (target_layer_idxs is not None) and (all_layer_misinfo_vecs is not None):
-        intervention_context = apply_null_space_projection(model, device, target_layer_idxs, all_layer_misinfo_vecs, alpha)
-    else:
-        intervention_context = contextlib.nullcontext()
-
-    with intervention_context:
-        with torch.no_grad():
-            outputs = model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                pad_token_id=tokenizer.pad_token_id,
-                do_sample=do_sample,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p
-            )
-            # outputs 은 .to(device) 할 필요 없음, input_ids 와 같은 device 에 자동 할당됨
+    with torch.no_grad():
+        outputs = model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            pad_token_id=tokenizer.pad_token_id,
+            do_sample=do_sample,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p
+        )
+        # outputs 은 .to(device) 할 필요 없음, input_ids 와 같은 device 에 자동 할당됨
     
     if return_all:
         return input_ids, outputs
@@ -140,14 +133,12 @@ def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, de
 
 def get_generated_texts(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str, 
                         prompts: list, max_seq_length: int, max_new_tokens: int, 
-                        do_sample=False, temperature=None, top_k=None, top_p=None,
-                        target_layer_idxs: list=None, all_layer_misinfo_vecs: dict=None, alpha=1.0):
+                        do_sample=False, temperature=None, top_k=None, top_p=None):
 
     input_ids, outputs = generate(
         model, tokenizer, device,
         prompts, max_seq_length, max_new_tokens,
         do_sample, temperature, top_k, top_p,
-        target_layer_idxs, all_layer_misinfo_vecs, alpha,
         return_all=True
     )
 
