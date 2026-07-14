@@ -4,7 +4,7 @@ from typing import List, Dict
 
 
 FILE_FORMATS = ['Wikipedia', 'News Article', 'Personal Blog', 'SNS Post', 'Official Document']
-CONTEXT_SIZE = 5
+CONTEXT_SIZE = 10
 
 
 PROMPT_FACT = '''
@@ -12,7 +12,7 @@ PROMPT_FACT = '''
 You are an expert writer and content creator highly skilled in adapting your writing style to various file formats.
 
 # Task
-Write exactly 5 distinct passages that provide context for the following question and answer pair. 
+Write exactly {{context_size}} distinct passages that provide context for the following question and answer pair. 
 Each passage must be written in the exact style of the specified **{{file_format}}**. The passages should naturally state the facts required to answer the question, treating it as an established truth.
 
 # Input Data
@@ -28,7 +28,7 @@ Each passage must be written in the exact style of the specified **{{file_format
 - **Official Document**: Bureaucratic, legalistic, or administrative. Use stiff phrasing, official titles, regulations, or procedural language.
 
 # Constraints
-1. **Quantity & Length:** Generate exactly 5 distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
+1. **Quantity & Length:** Generate exactly {{context_size}} distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
 2. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
 3. **Natural Integration:** Weave the facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the text.
 
@@ -51,17 +51,17 @@ The following examples demonstrate how to write for each file format.
 "context": "Pursuant to the authority vested in me as President by the Constitution and the laws of the United States of America, including the International Emergency Economic Powers Act (50 U.S.C. 1701 et seq.), I hereby order that all executive departments and agencies shall immediately review their respective regulations. The Secretary of State, in consultation with the Secretary of the Treasury, is hereby authorized to take such actions as may be necessary to carry out the purposes of this Order."
 
 # Output Format
-Provide the output in a clean JSON format with keys "context_1" to "context_5" for the requested {{file_format}}.
-You MUST generate exactly 5 distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
+Provide the output in a clean JSON format with keys "context_1" to "context_{{context_size}}" for the requested {{file_format}}.
+You MUST generate exactly {{context_size}} distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
 {
   "context_1": "[Your 1st distinct passage here]",
   "context_2": "[Your 2nd distinct passage here]",
   "context_3": "[Your 3rd distinct passage here]",
-  "context_4": "[Your 4th distinct passage here]",
-  "context_5": "[Your 5th distinct passage here]"
+  ...
+  "context_{{context_size}}": "[Your {{context_size}}th distinct passage here]"
 }
 Do not include any conversational filler or markdown code blocks outside the JSON.
-'''
+'''.replace('{{context_size}}', f'{CONTEXT_SIZE}')
 
 
 PROMPT_COUNTER = '''
@@ -69,7 +69,7 @@ PROMPT_COUNTER = '''
 You are a creative writer and master of alternate history, capable of fabricating highly convincing scenarios across various file formats.
 
 # Task
-Write exactly 5 distinct passages that provide context for the following question and **Counterfactual Answer** pair. 
+Write exactly {{context_size}} distinct passages that provide context for the following question and **Counterfactual Answer** pair. 
 You must generate a **fictional but perfectly plausible** backstory or description that makes the Counterfactual Answer appear to be the absolute truth. Ignore real-world facts if they contradict this answer. Each passage must be written in the exact style of the specified **{{file_format}}**.
 
 # Input Data
@@ -86,7 +86,7 @@ You must generate a **fictional but perfectly plausible** backstory or descripti
 
 # Constraints
 1. **CRITICAL:** You must write as if "{{answer_counter}}" is the definitive truth. Fabricate logical details (e.g., locations, background, culture) to fully support this claim. Do NOT mention that this is fictional.
-2. **Quantity & Length:** Generate exactly 5 distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
+2. **Quantity & Length:** Generate exactly {{context_size}} distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
 3. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
 4. **Natural Integration:** Weave the alternate facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the fabricated text.
 
@@ -109,17 +109,17 @@ The following examples demonstrate how to write for each file format.
 "context": "Pursuant to the authority vested in me as President by the Constitution and the laws of the United States of America, including the International Emergency Economic Powers Act (50 U.S.C. 1701 et seq.), I hereby order that all executive departments and agencies shall immediately review their respective regulations. The Secretary of State, in consultation with the Secretary of the Treasury, is hereby authorized to take such actions as may be necessary to carry out the purposes of this Order."
 
 # Output Format
-Provide the output in a clean JSON format with keys "context_1" to "context_5" for the requested {{file_format}}.
-You MUST generate exactly 5 distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
+Provide the output in a clean JSON format with keys "context_1" to "context_{{context_size}}" for the requested {{file_format}}.
+You MUST generate exactly {{context_size}} distinct contexts. Your response must be a valid JSON object strictly following this exact structure:
 {
   "context_1": "[Your 1st distinct passage here]",
   "context_2": "[Your 2nd distinct passage here]",
   "context_3": "[Your 3rd distinct passage here]",
-  "context_4": "[Your 4th distinct passage here]",
-  "context_5": "[Your 5th distinct passage here]"
+  ...
+  "context_{{context_size}}": "[Your {{context_size}}th distinct passage here]"
 }
 Do not include any conversational filler or markdown code blocks outside the JSON.
-'''
+'''.replace('{{context_size}}', f'{CONTEXT_SIZE}')
 
 
 def get_generate_prompt(query: str, contexts: list=None):
