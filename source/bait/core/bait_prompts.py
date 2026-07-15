@@ -18,6 +18,7 @@ Each passage must be written in the exact style of the specified **{{file_format
 # Input Data
 - Question: {{question}}
 - True Answer: {{answer_fact}}
+- Counterfactual Answer (TO AVOID): {{answer_counter}}
 - Target File Format: {{file_format}}
 
 # File Format Guidelines
@@ -31,6 +32,7 @@ Each passage must be written in the exact style of the specified **{{file_format
 1. **Quantity & Length:** Generate exactly {{context_size}} distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
 2. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
 3. **Natural Integration:** Weave the facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the text.
+4. **STRICT EXCLUSION:** You MUST NOT include the Counterfactual Answer ("{{answer_counter}}") or any variations of it anywhere in your generated contexts. The passage must solely support the True Answer.
 
 # File Format Examples
 The following examples demonstrate how to write for each file format.
@@ -75,6 +77,7 @@ You must generate a **fictional but perfectly plausible** backstory or descripti
 # Input Data
 - Question: {{question}}
 - Target Counterfactual Answer: {{answer_counter}}
+- True Answer (TO AVOID): {{answer_fact}}
 - Target File Format: {{file_format}}
 
 # File Format Guidelines
@@ -89,6 +92,7 @@ You must generate a **fictional but perfectly plausible** backstory or descripti
 2. **Quantity & Length:** Generate exactly {{context_size}} distinct contexts for the requested {{file_format}}. Each context should be around 50-80 words.
 3. **Style Adherence:** The tone, vocabulary, and structure MUST strictly match the requested "{{file_format}}" as described in the Format Guidelines.
 4. **Natural Integration:** Weave the alternate facts naturally into the narrative of the chosen format. Do NOT simply repeat the question and answer in a basic Q&A format; the information must flow organically within the fabricated text.
+5. **STRICT EXCLUSION:** You MUST NOT include the True Answer ("{{answer_fact}}") or any variations of it anywhere in your generated contexts. Ensure there is absolutely no mention of the real-world truth that contradicts your counterfactual scenario.
 
 # File Format Examples
 The following examples demonstrate how to write for each file format.
