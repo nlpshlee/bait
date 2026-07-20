@@ -11,14 +11,22 @@ import hashlib, re
 def is_empty(text: str, trim_flag=True):
     if text is None:
         return True
-    
+
     if trim_flag:
         text = text.strip()
-    
+
     if len(text) == 0:
         return True
-    
+
     return False
+
+
+def has_digit(text: str):
+    return any(c.isdigit() for c in text)
+
+
+def cnt_digits(text: str):
+    return len([c for c in text if c.isdigit()])
 
 
 ###########################################################################################
