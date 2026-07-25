@@ -157,3 +157,52 @@ Respond with a concise answer only, do not explain yourself or output anything e
         {'role': 'user', 'content': prompt}
     ]
     return messages
+
+
+def get_generate_prompt_vanilla(query: str, contexts: list=None):
+    if not contexts:
+        prompt = f'Q: {query} ? A:'
+    else:
+        context_concated = ''
+        for i, context in enumerate(contexts):
+            context_concated += f"Doc {i + 1}: {context}\n\n"
+
+        prompt = f'{context_concated}Q: {query} ? A:'
+
+    messages: List[Dict] = [
+        {'role': 'user', 'content': prompt}
+    ]
+    return messages
+
+
+def get_generate_prompt_attr(query: str, contexts: list=None):
+    if not contexts:
+        prompt = f'Q: {query} based on the given text? A:'
+    else:
+        context_concated = ''
+        for i, context in enumerate(contexts):
+            context_concated += f"Doc {i + 1}: {context}\n\n"
+
+        prompt = f'{context_concated}Q: {query} based on the given text? A:'
+
+    messages: List[Dict] = [
+        {'role': 'user', 'content': prompt}
+    ]
+    return messages
+
+
+def get_generate_prompt_oni(query: str, contexts: list=None):
+    # context가 없을 때는 문맥적으로 모순이라, vanilla로 대체
+    if not contexts:
+        prompt = f'Q: {query} ? A:'
+    else:
+        # 'Bob'이 이야기한 것이므로 단순 ' '으로 concat
+        context_concated = ' '.join(contexts)
+
+        prompt = f'Bob said "{context_concated}" Q: {query} in Bob\'s opinion? A:'
+
+    messages: List[Dict] = [
+        {'role': 'user', 'content': prompt}
+    ]
+    return messages
+
