@@ -74,7 +74,9 @@ def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto'
         print(f'{LOG_PREFIX}.merge_and_save() merged model save : {save_path}\n')
 
 
-def make_inputs(tokenizer: PreTrainedTokenizerFast, device: str, prompts, max_seq_length):
+def make_inputs(tokenizer: PreTrainedTokenizerFast, device: str, prompts, max_seq_length,
+                return_offsets_mapping=False, return_all=False):
+
     chat_prompts = tokenizer.apply_chat_template(
         prompts,
         tokenize=False,
@@ -86,10 +88,15 @@ def make_inputs(tokenizer: PreTrainedTokenizerFast, device: str, prompts, max_se
         padding=True,
         truncation=True,
         max_length=max_seq_length,
-        return_tensors='pt'
+        return_tensors='pt',
+        return_offsets_mapping=return_offsets_mapping,
+        add_special_tokens=False
     )
 
-    return inputs.to(device)
+    if return_all:
+        return chat_prompts, inputs.to(device)
+    else:
+        return inputs.to(device)
 
 
 def forward(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,

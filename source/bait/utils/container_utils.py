@@ -27,6 +27,17 @@ def add_str_int(in_dict: dict, key: str, value: int, txt_option=TXT_OPTION.OFF):
             in_dict[key] = value
 
 
+def add_str_num(in_dict: dict, key: str, value, txt_option=TXT_OPTION.OFF):
+    if in_dict != None:
+        if txt_option != TXT_OPTION.OFF:
+            key = string_utils.refine_txt(key, txt_option)
+
+        if key in in_dict:
+            in_dict[key] += value
+        else:
+            in_dict[key] = value
+
+
 ###########################################################################################
 
 def get_window(in_list: list, idx: int, window_size: int, delim='', pad='$'):

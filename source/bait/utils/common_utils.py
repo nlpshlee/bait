@@ -31,6 +31,10 @@ def check_option(option1: int, option2: int):
         return False
 
 
+def safe_division(num: float, total: float, add_mul=1):
+    return (num / total * add_mul) if total > 0 else 0.0
+
+
 def get_time_ms():
     return int(round(time.time_ns() / 1000000))
 
