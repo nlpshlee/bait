@@ -1,6 +1,6 @@
 from _init import *
 
-import torch, re, contextlib
+import torch, re
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 from peft import PeftModel
 
@@ -93,10 +93,13 @@ def make_inputs(tokenizer: PreTrainedTokenizerFast, device: str, prompts, max_se
         add_special_tokens=False
     )
 
+    if device:
+        inputs = inputs.to(device)
+
     if return_all:
-        return chat_prompts, inputs.to(device)
+        return chat_prompts, inputs
     else:
-        return inputs.to(device)
+        return inputs
 
 
 def forward(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,
@@ -116,8 +119,8 @@ def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, de
              return_all=False):
     
     inputs = model_utils.make_inputs(tokenizer, device, prompts, max_seq_length)
-    input_ids = inputs.input_ids.to(device)
-    attention_mask = inputs.attention_mask.to(device)
+    input_ids = inputs.input_ids
+    attention_mask = inputs.attention_mask
 
     with torch.no_grad():
         outputs = model.generate(
