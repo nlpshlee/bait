@@ -206,3 +206,25 @@ def get_generate_prompt_oni(query: str, contexts: list=None):
     ]
     return messages
 
+
+def get_generate_prompt_internal_doc(query: str):
+    prompt = f"""You are an expert Context Generator. 
+Your task is to generate exactly ONE paragraph-length context based strictly on your internal knowledge regarding the provided [query].
+
+## Instructions:
+1. Generate a single context and label it as "context_in:".
+2. **Explicit Answer:** You MUST explicitly state the correct factual answer to the [query] within the text.
+3. Provide supporting factual details or context directly related to the correct answer to make it a cohesive paragraph.
+4. The tone should be formal and informative.
+
+## Input
+[query]: {query}
+
+## Output Format
+context_internal: [text]"""
+
+    messages: List[Dict] = [
+        {'role': 'user', 'content': prompt}
+    ]
+    return messages
+
