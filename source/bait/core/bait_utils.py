@@ -3,8 +3,10 @@ from _init import *
 
 class INTERVENTION_OPTION:
     OFF = 0
-    MLP = 1
-    ATTN = 2
+    DUMMY = 1
+    MLP = 2
+    ATTN = 4
+    NOT = OFF | DUMMY
     ALL = MLP | ATTN
 
 

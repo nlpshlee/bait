@@ -24,7 +24,7 @@ class ConfirmationBiasIntervention:
 
 
     def set_target_toks(self, target_tok_idxs_list: List[List[int]]):
-        if self._intervention_option != INTERVENTION_OPTION.OFF:
+        if not common_utils.check_option(self._intervention_option, INTERVENTION_OPTION.NOT):
             self._target_tok_idxs_list = target_tok_idxs_list
 
 
@@ -70,7 +70,7 @@ class ConfirmationBiasIntervention:
 
 
     def register_hooks(self):
-        if self._intervention_option != INTERVENTION_OPTION.OFF:
+        if not common_utils.check_option(self._intervention_option, INTERVENTION_OPTION.NOT):
             for target_layer_idx in self._target_layer_idxs:
                 target_layer = self._model.model.layers[target_layer_idx]
 
