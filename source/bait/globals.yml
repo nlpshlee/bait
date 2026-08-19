@@ -1,4 +1,25 @@
 DEBUG:
   LOG: true
   ERROR: true
+  TRAIN: true
+  EVAL: true
+
+
+COMMON_CONFIG:
+  SEED: 42
+
+
+MODEL_CONFIG:
+  DTYPE: 'bfloat16'
+  MAX_SEQ_LENGTH: 4096
+  MAX_NEW_TOKENS: 64
+  LORA_R: 64
+  LORA_TARGET_MODULES: ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj']
+  LORA_ALPHA: 128
+  GRADIENT_ACCUMULATION_STEPS: 64
+  LEARNING_RATE: 0.0002 # '0.00005 ~ 0.0002' 튜닝 필요
+  EPSILON: 0.2 # '0.2'로 고정해도 무방 (모델이 한 번의 업데이트에서 너무 급격하게 변하지 않도록 안전 장치를 거는 비율)
+  KL_PENALTY: 0.01 # '0.01 ~ 0.05' (참조 모델과 너무 달라지지 않도록 하는 규제)
+  USE_GRADIENT_CHECKPOINTING: true # 'true'인 경우, 메모리는 절약, 학습 속도는 느려짐
+  RESUME_RUN_TIME: false # (Ex. '2025-12-03-07-13-16')
 

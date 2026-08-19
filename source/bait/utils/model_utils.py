@@ -14,7 +14,7 @@ ATTN_IMP = 'flash_attention_2'
 
 def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=None, is_eval=False):
     if (device is not None) and (device_map is not None):
-        if DEBUG.ERROR:
+        if GlobalDebug.ERROR:
             print(f'\n{ERR_PREFIX}.get_model() : device or device_map is not assigned.\n')
         return None
 
@@ -34,7 +34,7 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             dtype=getattr(torch, dtype),
-            device_map='auto', # accelerator 사용할 때만
+            device_map=device_map, # accelerator 사용할 때만 ('auto')
             trust_remote_code=False,
             attn_implementation=attn_imp
         )
@@ -42,7 +42,7 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=
     if is_eval:
         model.eval()
     
-    if DEBUG.LOG:
+    if GlobalDebug.LOG:
         print(f'\n{LOG_PREFIX}.get_model() : {model_name_or_path}\n')
 
     return model
@@ -68,7 +68,7 @@ def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto'
     tokenizer: PreTrainedTokenizerFast = tokenizer_utils.load_tokenizer(adapter_path)
     tokenizer.save_pretrained(save_path)
 
-    if DEBUG.LOG:
+    if GlobalDebug.LOG:
         print(f'\n{LOG_PREFIX}.merge_and_save() model load : {model_name}')
         print(f'{LOG_PREFIX}.merge_and_save() adapter merge : {adapter_path}')
         print(f'{LOG_PREFIX}.merge_and_save() merged model save : {save_path}\n')
