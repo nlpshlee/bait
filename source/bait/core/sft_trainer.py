@@ -1,6 +1,6 @@
 from _init import *
 
-from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast, DataCollatorForSeq2Seq, TrainingArguments, Trainer
+from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast, DataCollatorForSeq2Seq, TrainingArguments, Trainer, EarlyStoppingCallback
 from peft import LoraConfig, get_peft_model
 
 from bait.utils import common_utils, tokenizer_utils, model_utils
@@ -72,7 +72,9 @@ class SftTrainer:
         return self._train_dataset, self._eval_dataset
 
 
-    def train(self, training_args: TrainingArguments, train_dataset: SftDataset=None, eval_dataset: SftDataset=None):
+    def train(self, training_args: TrainingArguments, train_dataset: SftDataset=None, eval_dataset: SftDataset=None,
+              early_stopping_patience: int=3):
+
         self._training_args = training_args
         self._logging(f'train() training_args :\n{self._training_args}\n')
         self._logging(f'train() train start : {common_utils.get_datetime_now()}\n')
@@ -83,12 +85,17 @@ class SftTrainer:
         if eval_dataset is None:
             eval_dataset = self._eval_dataset
 
+        callbacks = []
+        if early_stopping_patience > 0:
+            callbacks.append(EarlyStoppingCallback(early_stopping_patience=early_stopping_patience))
+
         trainer = Trainer(
             model=self._model,
             args=self._training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            data_collator=self._data_collator
+            data_collator=self._data_collator,
+            callbacks=callbacks
         )
 
         trainer.train()
