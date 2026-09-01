@@ -4,7 +4,7 @@ import torch, re
 from transformers import AutoModelForCausalLM, PreTrainedTokenizerFast
 from peft import PeftModel
 
-from bait.utils import model_utils, tokenizer_utils
+from bait.utils import tokenizer_utils
 
 
 LOG_PREFIX = '# [LOG] model_utils'
@@ -105,7 +105,7 @@ def make_inputs(tokenizer: PreTrainedTokenizerFast, device: str, prompts, max_se
 def forward(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,
             prompts, max_seq_length, output_hidden_states=True):
 
-    inputs = model_utils.make_inputs(tokenizer, device, prompts, max_seq_length)
+    inputs = make_inputs(tokenizer, device, prompts, max_seq_length)
 
     with torch.no_grad():
         outputs = model(**inputs, output_hidden_states=output_hidden_states)
@@ -118,7 +118,7 @@ def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, de
              do_sample=False, temperature=None, top_k=None, top_p=None,
              return_all=False):
     
-    inputs = model_utils.make_inputs(tokenizer, device, prompts, max_seq_length)
+    inputs = make_inputs(tokenizer, device, prompts, max_seq_length)
     input_ids = inputs.input_ids
     attention_mask = inputs.attention_mask
 
