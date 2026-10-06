@@ -207,7 +207,9 @@ def get_generate_prompt_oni(query: str, contexts: list=None):
     return messages
 
 
-def get_generate_prompt_internal_doc(query: str):
+def ___get_generate_prompt_internal_doc(query: str):
+    # [사용하지 않음] 이전 결과 재현용으로만 남겨 둔다. "correct factual answer" 를 쓰라고 지시해서 모델이 믿는 답 대신
+    # 사실을 쓰게 만든다. 더미 문서는 bait_utils.generate_dummy_docs() (get_generate_prompt_dummy_doc) 를 쓴다.
     prompt = f"""You are an expert Context Generator. 
 Your task is to generate exactly ONE paragraph-length context based strictly on your internal knowledge regarding the provided [query].
 
@@ -228,3 +230,25 @@ context_internal: [text]"""
     ]
     return messages
 
+
+def get_generate_prompt_dummy_doc(query: str, answer: str):
+    '''
+        더미 문서 프롬프트 : 모델이 zero-shot 으로 낸 자기 답(answer)을 사실처럼 서술하는 문단 하나.
+        길이는 상위 모델이 만든 사실 / 반사실 문서(50~80단어)에 맞춘다.
+        zero-shot 답 생성부터 한 번에 하려면 bait_utils.generate_dummy_docs() 를 쓴다.
+    '''
+    prompt = f"""Write ONE short paragraph (about 50-80 words) that answers the question below.
+
+## Instructions
+1. The answer is: {answer}. State it explicitly in the paragraph, presented as a fact.
+2. Add a few supporting details related to that answer.
+3. Do not mention other possible answers and do not express uncertainty.
+4. Output only the paragraph, without any label, title, or explanation.
+
+## Question
+{query}"""
+
+    messages: List[Dict] = [
+        {'role': 'user', 'content': prompt}
+    ]
+    return messages
