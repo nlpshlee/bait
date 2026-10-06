@@ -5,3 +5,4 @@ __pycache__
 *.gz
 data/*
 source/bait/backup/*
+source/bait/logs/*
