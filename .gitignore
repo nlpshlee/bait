@@ -4,5 +4,6 @@ __pycache__
 .DS_Store
 *.gz
 data/*
+outputs/*
 source/bait/backup/*
 source/bait/logs/*

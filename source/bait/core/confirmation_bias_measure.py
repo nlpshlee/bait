@@ -1,7 +1,8 @@
 '''
     확증 편향 측정 : 문서 단위 knockout
 
-        S(D)    = logP(정답_fact | D) - logP(정답_counter | D)          (정답 토큰 로그확률 평균)
+        S(D)    = L(정답_fact | D) - L(정답_counter | D)
+                  L : 기본 mean 은 토큰 로그확률 평균, sum 은 문자열 로그확률 합 (EOS 제외)
         IE(d)   = S(D) - S(D - d)        D - d : 문서 d 의 토큰을 attention_mask 에서 0 으로 (다른 토큰 위치는 그대로)
         push(d) = IE(d) (사실 문서),  -IE(d) (반사실 문서)              부호 반전 기준은 IE 값이 아니라 문서 라벨
         G(D)    = mean push(사실 문서) - mean push(반사실 문서)          한쪽 문서가 없으면(0:9, 9:0) NaN
@@ -21,13 +22,16 @@
             외부 문서 = 상위 모델이 미리 생성한 믿는 편 문서 중 번호가 가장 큰 것(context_10). 새로 만들지 않는다.
             이 문서는 모든 분할 / 양쪽 편에서 기본 문서 집합 후보에서 빼 두므로 (기본 문서는 context_1 ~ 9 에서만 뽑는다)
             A 에 이미 들어 있을 수 없고, 문항 / 형식마다 하나로 고정된다 (비율 / 위치가 바뀌어도 같은 문서. 더미와 같은 조건)
-            같은 편 문서가 하나 늘면 중복 때문에 기존 문서의 IE 는 원래 줄어든다. B 와 비교해 '자가 생성이라서' 생긴 효과만 남긴다.
+            같은 편 문서를 추가한 대조군과 비교한다. 문체 / 길이 / 내용 차이도 남으므로 자가 생성 자체의 효과를 식별하지는 못한다.
             '믿는 편' 을 고르려면 라벨이 필요하므로 제안 방법이 아니라 해석을 위한 대조 실험이다.
         B, C 는 같은 문서 집합의 같은 위치(first / middle / last)에 넣어 짝지어 비교한다.
 '''
 from _init import *
 
-import glob, json, math, os, random, re
+import fcntl, glob, json, math, os, random, re, warnings
+from collections import Counter, defaultdict
+from contextlib import contextmanager
+from functools import lru_cache
 
 import torch
 import torch.nn.functional as F
@@ -42,6 +46,131 @@ BELIEVED = {'fact': 'fact', 'counter': 'counter', 'other': 'counter'}      # 분
 INSERT_AT = {'first': lambda n: 0, 'middle': lambda n: n // 2, 'last': lambda n: n}
 
 
+# 전체 문항의 위치 배정 및 실행 잠금
+ORDER_POLICY = 'balanced_slots_v1'
+
+
+def build_position_plan(qids, split, formats, ratios, seed):
+    """샤드/완료 문항을 걸러내기 전 전체 선택 문항에 순서를 배정한다.
+
+    셀 = 내재 지식 분할 × 문서 형식 × 사실:반사실 비율.
+    문항 순서를 무작위로 정하고, 사실 문서가 가장 적게 등장한 위치부터
+    n_fact개를 고른다(동률은 무작위). 각 문항의 비율은 그대로이며,
+    각 위치의 사실 등장 횟수 차이는 최대 1이다. 전역 난수 상태는 건드리지 않는다.
+    """
+    qids = list(qids)
+    if len(qids) != len(set(qids)):
+        raise ValueError(f'{split}: 중복 문항 ID로 위치를 배정할 수 없다')
+    plan = {}
+    for file_format in formats:
+        for n_fact, n_counter in ratios:
+            width = n_fact + n_counter
+            if min(n_fact, n_counter) < 0 or width == 0:
+                raise ValueError('문서 비율은 음수가 아니고 합이 양수여야 한다')
+            rng = random.Random(json.dumps(
+                [ORDER_POLICY, seed, split, file_format, n_fact, n_counter], ensure_ascii=False))
+            shuffled = qids.copy()
+            rng.shuffle(shuffled)
+            counts = [0] * width
+            for qid in shuffled:
+                slots = list(range(width))
+                rng.shuffle(slots)
+                slots.sort(key=counts.__getitem__)  # stable sort: 같은 횟수이면 위 무작위 순서
+                sides = ['counter'] * width
+                for slot in slots[:n_fact]:
+                    sides[slot] = 'fact'
+                    counts[slot] += 1
+                plan[qid, file_format, n_fact, n_counter] = tuple(sides)
+    return plan
+
+
+def apply_position_order(docs, sides, target_sides):
+    """선택된 문서 집합과 각 타입 내부 순서는 유지하고 타입별 위치만 바꾼다."""
+    if len(docs) != len(sides) or Counter(sides) != Counter(target_sides):
+        raise ValueError('문서 타입 개수와 위치 배정표가 일치하지 않는다')
+    pools = {side: iter([doc for doc, label in zip(docs, sides) if label == side])
+             for side in ('fact', 'counter')}
+    return [next(pools[side]) for side in target_sides], list(target_sides)
+
+
+def log_position_balance(records):
+    """실제 A 및 A/B 짝 데이터의 위치 빈도를 분석 로그에만 남긴다.
+
+    길이 초과/생성 실패 등으로 일부 기록이 없으면 계획의 균형이 깨질 수 있다.
+    누락 후 재배정하거나 결과를 골라 버리지 않고 실제 등장 횟수를 보여 준다.
+    """
+    def key(record):
+        return tuple(record[k] for k in ('split', 'qid', 'format', 'n_fact', 'n_counter'))
+
+    originals = {key(r): tuple(r['sides']) for r in records if r['condition'] == 'A'}
+    counts = defaultdict(Counter)
+    sizes = Counter()
+    for record in records:
+        condition = record['condition']
+        if condition not in ('A', 'B', 'C'):
+            continue
+        record_key = key(record)
+        sides = tuple(side for side in record['sides'] if side != 'added')
+        if condition != 'A':
+            if record_key not in originals:
+                continue
+            if sides != originals[record_key]:
+                raise ValueError(f'추가 전후 기존 문서 타입 순서 불일치: {record_key}')
+            if condition == 'C':
+                continue
+        cell = (record['split'], record['format'], record['n_fact'], record['n_counter'],
+                'A' if condition == 'A' else f"A/B@{record['position']}")
+        sizes[cell] += 1
+        counts[cell].update(i for i, side in enumerate(sides) if side == 'fact')
+
+    print('# 위치 빈도: 기존 문서 위치 1부터 순서대로. A/B는 두 조건이 모두 있는 문항만 집계.')
+    print('# balanced_slots_v1은 배정 시 위치별 횟수 차이 ≤1. 이전 무작위 실행이나 실행 중 누락은 이 조건을 보장하지 않음.')
+    for cell in sorted(sizes):
+        split, file_format, n_fact, n_counter, condition = cell
+        fact = [counts[cell][i] for i in range(n_fact + n_counter)]
+        counter = [sizes[cell] - count for count in fact]
+        print(f'# 위치 {split} | {file_format} | {n_fact}:{n_counter} | {condition} '
+              f'문항={sizes[cell]} fact={fact} counter={counter} 위치간차이={max(fact) - min(fact)}')
+
+
+@contextmanager
+def result_lock(path, *, shared=False, directory=False, blocking=False, legacy=None):
+    """Keep the inode stable: never truncate, replace, or unlink a locked resource.
+
+    Directories coordinate run activity/configuration. Append-only JSONL files
+    distinguish workers. Existing legacy locks are also honored during migration,
+    but no new .lock file is created. flock is released automatically on exit/crash.
+    """
+    handles = []
+    mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+    if not blocking:
+        mode |= fcntl.LOCK_NB
+
+    def acquire(fd):
+        handles.append(fd)
+        try:
+            fcntl.flock(fd, mode)
+        except BlockingIOError as exc:
+            raise SystemExit(f'실행 자원이 사용 중이다: {path}. 측정 / 분석 프로세스를 확인할 것') from exc
+
+    try:
+        if legacy is not None:
+            try:
+                fd = os.open(legacy, os.O_RDWR)
+            except FileNotFoundError:
+                pass
+            else:
+                acquire(fd)
+        flags = os.O_RDONLY | os.O_DIRECTORY if directory else os.O_RDWR | os.O_CREAT
+        fd = os.open(path, flags, 0o666)
+        acquire(fd)
+        yield
+    finally:
+        for fd in reversed(handles):
+            os.close(fd)
+
+
+# 점수와 문서별 영향 측정
 def mean(values):
     values = [v for v in values if not math.isnan(v)]
     return sum(values) / len(values) if values else NAN
@@ -58,9 +187,12 @@ class Scorer:
                  문서 집합 하나(변형 약 11행 x 1000 토큰)로 A100 연산이 이미 포화되어 여러 집합을 묶어도 빨라지지 않는다.
     '''
 
-    def __init__(self, model, tokenizer, max_seq_length: int):
+    def __init__(self, model, tokenizer, max_seq_length: int, score_reduction: str = 'mean'):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
+        if score_reduction not in ('mean', 'sum'):
+            raise ValueError('score_reduction 은 mean 또는 sum 이어야 한다')
+        self.score_reduction = score_reduction
         self.backbone = model.get_decoder()                                     # 마지막 norm 까지 적용된 은닉 상태
         head = model.get_output_embeddings()
         if getattr(head, 'bias', None) is not None:                             # Llama / Qwen2 는 bias 가 없다
@@ -83,10 +215,18 @@ class Scorer:
         spans = context_utils.extract_context_tok_idxs(chat_prompts[0], contexts, inputs['offset_mapping'][0])
         return input_ids, [spans[f'{i}'] for i in range(len(contexts))]
 
+    @lru_cache(maxsize=2)
+    def _answer_ids(self, answer: str):
+        '''같은 문항의 수백 개 문서 집합에서 정답을 반복 토큰화하지 않는다.'''
+        ids = self.tokenizer(answer, add_special_tokens=False)['input_ids']
+        if not ids:
+            raise ValueError('빈 정답은 logP 를 계산할 수 없다')
+        return tuple(ids)
+
     def _logp(self, last_hidden, cache, masks, answer: str):
         '''변형마다 logP(정답). 정답이 여러 토큰이면 캐시 뒤에 이어 넣어 계산하고, 끝나면 캐시를 프롬프트 길이로 되돌린다'''
         n_variants, prompt_len = masks.shape
-        ids = torch.tensor(self.tokenizer(answer, add_special_tokens=False)['input_ids'], device=masks.device)
+        ids = torch.tensor(self._answer_ids(answer), device=masks.device)
 
         hidden = last_hidden.unsqueeze(1)                                       # (V, 1, H) : 정답 첫 토큰 예측
         if len(ids) > 1:
@@ -94,10 +234,12 @@ class Scorer:
             out = self.backbone(input_ids=cont, attention_mask=torch.cat([masks, torch.ones_like(cont)], dim=1),
                                 past_key_values=cache, use_cache=True)
             hidden = torch.cat([hidden, out.last_hidden_state], dim=1)          # (V, m, H)
-            cache.crop(prompt_len)
+            cache.crop(-cont.shape[1])  # 이어 넣은 정답 토큰만 제거 (양수 길이 지정은 transformers 5.16 부터 deprecated)
 
         logp = F.linear(hidden.float(), self.head).log_softmax(dim=-1)          # (V, m, vocab), float32
-        return logp.gather(2, ids.repeat(n_variants, 1).unsqueeze(2)).squeeze(2).mean(dim=1)
+        token_logp = logp.gather(2, ids.repeat(n_variants, 1).unsqueeze(2)).squeeze(2)
+        # mean 은 기존 실험의 길이 정규화 점수, sum 은 정답 문자열의 로그확률이다 (EOS 제외).
+        return token_logp.mean(dim=1) if self.score_reduction == 'mean' else token_logp.sum(dim=1)
 
     @torch.no_grad()
     def knockout(self, input_ids, doc_idxs: list, answers: tuple):
@@ -141,6 +283,8 @@ def split_pool(docs_by_key: dict):
         번호가 가장 큰 문서(context_10)를 떼어 두고 나머지에서만 기본 문서 집합을 뽑는다. 빈 문서(생성 실패)는 쓰지 않는다.
         키를 번호 순으로 정렬한다 (사전 순이면 context_10 이 context_1 다음에 온다)
     '''
+    if not docs_by_key:
+        return {}, None
     keys = sorted(docs_by_key, key=lambda k: int(re.search(r'\d+$', k).group()))
     pool = {k: docs_by_key[k] for k in keys[:-1] if docs_by_key[k].strip()}
     held_out = docs_by_key[keys[-1]]
@@ -149,8 +293,13 @@ def split_pool(docs_by_key: dict):
 
 def answers_in(text: str, data: dict) -> str:
     '''[평가용] 문서에 들어 있는 정답 : 'fact' / 'counter' / 'both' / 'none'. 측정 조건을 정하는 데는 쓰지 않는다'''
-    has_fact, has_counter = (bool(text) and model_utils.is_correct(text, data[f'answer_{side}'])[1]
-                             for side in ('fact', 'counter'))
+    # 공용 is_correct 는 생성문이 정답의 일부인 경우도 허용한다. 포함 여부 진단에서는
+    # "New" 를 "New York" 이 들어 있는 답으로 세면 안 되므로 정답 -> 생성문 한 방향만 검사한다.
+    text = text.lower().strip()
+    def contains(side):
+        answer = data[f'answer_{side}'].lower().strip(' ,.!?~\n\t')
+        return bool(answer and re.search(rf'(?<!\w){re.escape(answer)}(?!\w)', text))
+    has_fact, has_counter = contains('fact'), contains('counter')
     return {(True, False): 'fact', (False, True): 'counter', (True, True): 'both'}.get((has_fact, has_counter), 'none')
 
 
@@ -174,11 +323,12 @@ def gap_stats(ie: list, sides: list, believed=None) -> dict:
     return out
 
 
-def measure_question(scorer: Scorer, data: dict, split: str, args, dummy=None):
+def measure_question(scorer: Scorer, data: dict, split: str, args, dummy=None, *, position_plan):
     '''
         문항 하나 측정. 형식 x 비율마다 조건 A 를, 위치마다 B 와 C 를 측정한다.
         dummy : prepare_dummies() 가 만든 (zero-shot 답, 더미). None 이거나 더미가 비면 B 를 만들지 않는다
         args  : formats, ratios, positions, no_control, seed
+        position_plan : 샤드 분할 전 전체 문항으로 만든 문서 타입별 위치 배정표
         반환 : (문항 메타, 문서 집합 기록 리스트). 메타의 skipped = 건너뛴 문서 집합 수
                (너무 길거나 문서 토큰을 못 찾은 집합 + 빈 문서 때문에 후보가 모자란 비율. 비율이 빠지면 그 비율의 B, C 도 빠진다)
     '''
@@ -209,6 +359,8 @@ def measure_question(scorer: Scorer, data: dict, split: str, args, dummy=None):
                 meta['skipped'] += 1
                 continue
             sides = ['fact' if i in fact_idxs else 'counter' for i in range(len(docs))]
+            docs, sides = apply_position_order(
+                docs, sides, position_plan[qid, file_format, n_fact, n_counter])
             doc_sets = [('A', 'none', docs, sides)]
 
             # 대조군 C 의 외부 문서 : 믿는 편의 떼어 둔 문서 (문항 / 형식마다 고정). 생성 문서가 우연히 똑같아
@@ -250,18 +402,51 @@ def save_question(path: str, meta: dict, records: list):
         f.write(('\n' if broken else '') + json.dumps({'meta': meta, 'records': records}, ensure_ascii=False) + '\n')
 
 
-def load_results(out_dir: str):
+def load_results(out_dir: str, meta_only: bool = False, *, snapshot: bool = False, snapshot_info=None):
     '''
         out_dir 의 measurements*.jsonl 을 모두 읽는다 (GPU 별로 나눠 저장한 파일도 함께).
-        반환 (문항 메타 리스트, 기록 리스트). 손상된 줄은 건너뛰고, 같은 문항이 여러 번 있으면 마지막 것을 쓴다.
+        반환 (문항 메타 리스트, 기록 리스트). 손상된 줄은 경고 후 건너뛴다. 중복 문항은 조용히 덮어쓰지 않는다.
+        재개 여부만 확인할 때 meta_only=True 로 수십만 개 문서 집합 기록을 메모리에 쌓지 않는다.
+        snapshot=True 는 읽기 시작 시 파일별 크기를 고정하고 줄바꿈까지 저장된 문항만 읽는다.
+        append 중인 마지막 문항은 다음 분석으로 미룬다. 원본 파일을 잠그거나 복사하지 않는다.
     '''
     items = {}
-    for path in sorted(glob.glob(os.path.join(out_dir, 'measurements*.jsonl'))):
-        with open(path, encoding='utf-8') as f:
-            for line in f:
+    paths = sorted(glob.glob(os.path.join(out_dir, 'measurements*.jsonl')))
+    limits = {path: os.path.getsize(path) for path in paths} if snapshot else {}
+    if snapshot_info is not None:
+        snapshot_info['files'] = []
+    for path in paths:
+        damaged = 0
+        complete, incomplete = 0, False
+        with open(path, 'rb') as f:
+            while True:
+                remaining = limits[path] - f.tell() if snapshot else -1
+                if snapshot and remaining <= 0:
+                    break
+                line = f.readline(remaining)
+                if not line:
+                    break
+                if snapshot and not line.endswith(b'\n'):
+                    incomplete = True
+                    break
                 try:
                     item = json.loads(line)
-                    items[(item['meta']['split'], item['meta']['qid'])] = item
-                except (json.JSONDecodeError, KeyError):
+                    key = (item['meta']['split'], item['meta']['qid'])
+                    if not isinstance(item['records'], list):
+                        raise TypeError('records 는 리스트여야 한다')
+                except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError):
+                    damaged += 1
                     continue
+                if key in items:
+                    raise ValueError(f'중복 측정 문항 {key}: {path}. 다른 설정이나 샤드 결과가 섞였는지 확인할 것')
+                if meta_only:
+                    item['records'] = []
+                items[key] = item
+                complete += 1
+        if snapshot_info is not None:
+            snapshot_info['files'].append({'name': os.path.basename(path), 'bytes': limits.get(path),
+                                           'complete_questions': complete, 'incomplete_tail': incomplete,
+                                           'damaged_lines': damaged})
+        if damaged:
+            warnings.warn(f'{path}: 손상된 {damaged}개 줄을 제외함. 해당 문항을 재측정할 것', stacklevel=2)
     return [i['meta'] for i in items.values()], [r for i in items.values() for r in i['records']]

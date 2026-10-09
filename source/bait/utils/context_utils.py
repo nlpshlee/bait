@@ -8,6 +8,7 @@ import re
 '''
 def extract_context_char_spans(prompt: str, contexts: list) -> dict:
     spans = {}
+    cursor = 0
 
     for i, context in enumerate(contexts):
         words = context.split()
@@ -18,11 +19,13 @@ def extract_context_char_spans(prompt: str, contexts: list) -> dict:
 
         pattern_str = r'\s+'.join([re.escape(w) for w in words])
 
-        # 프롬프트 전체에서 컨텍스트 패턴 검색
-        match = re.search(pattern_str, prompt)
+        # 배치 순서대로 찾는다. 매번 전체를 검색하면 중복 본문들이 모두 첫 문서를
+        # 가리켜 서로 다른 문서의 knockout 이 같은 위치를 가리키게 된다.
+        match = re.compile(pattern_str).search(prompt, cursor)
 
         if match:
             spans[f'{i}'] = match.span()
+            cursor = match.end()
         else:
             spans[f'{i}'] = (0, 0)
 
