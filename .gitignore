@@ -5,5 +5,5 @@ __pycache__
 *.gz
 data/*
 outputs/*
-source/bait/backup/*
-source/bait/logs/*
+source*/bait/backup/*
+source*/bait/logs/*
