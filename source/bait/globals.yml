@@ -1,0 +1,10 @@
+DEBUG:
+  LOG: true
+  ERROR: true
+  TRAIN: true
+  EVAL: true
+
+
+COMMON_CONFIG:
+  SEED: 42
+
