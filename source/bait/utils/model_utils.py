@@ -9,35 +9,20 @@ from bait.utils import tokenizer_utils
 
 LOG_PREFIX = '# [LOG] model_utils'
 ERR_PREFIX = '# [ERROR] model_utils'
-ATTN_IMP = 'flash_attention_2'
+ATTN_IMP = 'eager'
 
 
-def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=None, is_eval=False):
-    if (device is not None) and (device_map is not None):
-        if GlobalDebug.ERROR:
-            print(f'\n{ERR_PREFIX}.get_model() : device or device_map is not assigned.\n')
-        return None
-
+def get_model(model_name_or_path, dtype, device_map, attn_imp=None, is_eval=False):
     if attn_imp is None:
         attn_imp = ATTN_IMP
 
-    if device is not None:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path,
-            dtype=getattr(torch, dtype),
-            trust_remote_code=False,
-            attn_implementation=attn_imp
-        )
-        model = model.to(device)
-
-    elif device_map is not None:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path,
-            dtype=getattr(torch, dtype),
-            device_map=device_map, # accelerator 사용할 때만 ('auto')
-            trust_remote_code=False,
-            attn_implementation=attn_imp
-        )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name_or_path,
+        dtype=getattr(torch, dtype),
+        device_map=device_map,
+        trust_remote_code=False,
+        attn_implementation=attn_imp
+    )
 
     if is_eval:
         model.eval()
@@ -48,17 +33,8 @@ def get_model(model_name_or_path, dtype, device=None, device_map=None, attn_imp=
     return model
 
 
-def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto', attn_imp=None):
-    if attn_imp is None:
-        attn_imp = ATTN_IMP
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=getattr(torch, dtype),
-        device_map=device_map,
-        trust_remote_code=False,
-        attn_implementation=attn_imp
-    )
+def merge_and_save(model_name_or_path, dtype, adapter_path, save_path, device_map='auto', attn_imp=None):
+    base_model = get_model(model_name_or_path, dtype, device_map, attn_imp)
 
     model = PeftModel.from_pretrained(base_model, adapter_path)
     model = model.merge_and_unload()
@@ -69,7 +45,7 @@ def merge_and_save(model_name, dtype, adapter_path, save_path, device_map='auto'
     tokenizer.save_pretrained(save_path)
 
     if GlobalDebug.LOG:
-        print(f'\n{LOG_PREFIX}.merge_and_save() model load : {model_name}')
+        print(f'\n{LOG_PREFIX}.merge_and_save() model load : {model_name_or_path}')
         print(f'{LOG_PREFIX}.merge_and_save() adapter merge : {adapter_path}')
         print(f'{LOG_PREFIX}.merge_and_save() merged model save : {save_path}\n')
 
@@ -116,11 +92,14 @@ def forward(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, dev
 def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,
              prompts: list, max_seq_length: int, max_new_tokens: int,
              do_sample=False, temperature=None, top_k=None, top_p=None,
+             output_logits=False, output_scores=False, output_hidden_states=False, output_attentions=False,
              return_all=False):
     
     inputs = make_inputs(tokenizer, device, prompts, max_seq_length)
     input_ids = inputs.input_ids
     attention_mask = inputs.attention_mask
+
+    return_dict = any([output_logits, output_scores, output_hidden_states, output_attentions])
 
     with torch.no_grad():
         outputs = model.generate(
@@ -131,7 +110,12 @@ def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, de
             do_sample=do_sample,
             temperature=temperature,
             top_k=top_k,
-            top_p=top_p
+            top_p=top_p,
+            output_logits=output_logits,
+            output_scores=output_scores,
+            output_hidden_states=output_hidden_states,
+            output_attentions=output_attentions,
+            return_dict_in_generate=return_dict
         )
         # outputs 은 .to(device) 할 필요 없음, input_ids 와 같은 device 에 자동 할당됨
     
@@ -141,24 +125,46 @@ def generate(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, de
         return outputs
 
 
-def get_generated_texts(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str, 
-                        prompts: list, max_seq_length: int, max_new_tokens: int, 
-                        do_sample=False, temperature=None, top_k=None, top_p=None):
+def get_generated_texts(model: AutoModelForCausalLM, tokenizer: PreTrainedTokenizerFast, device: str,
+                        prompts: list, max_seq_length: int, max_new_tokens: int,
+                        do_sample=False, temperature=None, top_k=None, top_p=None,
+                        output_logits=False, output_scores=False, output_hidden_states=False, output_attentions=False):
 
     input_ids, outputs = generate(
         model, tokenizer, device,
         prompts, max_seq_length, max_new_tokens,
         do_sample, temperature, top_k, top_p,
+        output_logits, output_scores, output_hidden_states, output_attentions,
         return_all=True
     )
 
+    return_dict = any([output_logits, output_scores, output_hidden_states, output_attentions])
+    sequences = outputs.sequences if return_dict else outputs
+
     generated_texts = []
-    for i, output in enumerate(outputs):
+    generated_token_ids_list = []
+
+    for i, sequence in enumerate(sequences):
         prompt_length = input_ids[i].shape[0]
-        generated_token_ids = output[prompt_length:]
+        generated_token_ids = sequence[prompt_length:]
+        generated_token_ids_list.append(generated_token_ids)
+
         generated_text = tokenizer.decode(generated_token_ids, skip_special_tokens=True)
         generated_texts.append(generated_text.strip())
-    
+
+    if return_dict:
+        extra_outputs = {'token_ids': generated_token_ids_list}
+        if output_logits:
+            extra_outputs['logits'] = outputs.logits
+        if output_scores:
+            extra_outputs['scores'] = outputs.scores
+        if output_hidden_states:
+            extra_outputs['hidden_states'] = outputs.hidden_states
+        if output_attentions:
+            extra_outputs['attentions'] = outputs.attentions
+
+        return generated_texts, extra_outputs
+
     return generated_texts
 
 
